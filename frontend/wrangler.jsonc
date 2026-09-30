@@ -15,5 +15,11 @@
       "service": "leaguecup"
     }
   ],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Non-secret config only. SUPABASE_SERVICE_ROLE_KEY must be added in the
+  // dashboard as type "Secret" (Settings → Variables and Secrets) — never here,
+  // since this file is committed to git.
+  "vars": {
+    "SUPABASE_URL": "https://zzcwkhransxdgeiqrrtf.supabase.co"
+  }
 }
