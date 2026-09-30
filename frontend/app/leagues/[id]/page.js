@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import CompetitionHeader from '@/components/CompetitionHeader';
+import { downloadStandings, shareStandings, canShareFiles } from '@/lib/standingsImage';
 
 function TeamLabel({ name, on }) {
   return on ? <mark className="hl">{name}</mark> : name;
@@ -63,6 +64,10 @@ export default function LeagueDetailPage() {
   const [error, setError] = useState('');
   const [tab, setTab] = useState('standings');
   const [query, setQuery] = useState('');
+  const [canShare, setCanShare] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => setCanShare(canShareFiles()), []);
 
   useEffect(() => {
     api.getLeague(id).then(setLeague).catch((e) => setError(e.message));
@@ -99,6 +104,17 @@ export default function LeagueDetailPage() {
   const visibleRounds = rounds
     .map(([r, ms]) => [r, ms, ms.filter(involves)])
     .filter(([, ms, shown]) => !found || shown.length > 0 || league.teams.some((t) => found.has(t.id) && !ms.some((m) => m.homeId === t.id || m.awayId === t.id)));
+
+  async function exportImage(share) {
+    setExporting(true);
+    try {
+      if (!share || !(await shareStandings(league))) await downloadStandings(league);
+    } catch (err) {
+      alert(`Gagal membuat gambar: ${err.message}`);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function saveMatch(matchId, body) {
     setLeague(await api.saveLeagueMatch(id, matchId, body));
@@ -140,6 +156,17 @@ export default function LeagueDetailPage() {
 
       {tab === 'standings' && (
         <div className="card table-wrap">
+          <div className="card-toolbar">
+            {found && <span className="muted small">Gambar selalu berisi klasemen lengkap.</span>}
+            <button className="btn sm" onClick={() => exportImage(false)} disabled={exporting}>
+              ⬇ Download gambar
+            </button>
+            {canShare && (
+              <button className="btn sm" onClick={() => exportImage(true)} disabled={exporting}>
+                📤 Bagikan
+              </button>
+            )}
+          </div>
           <table className="standings">
             <thead>
               <tr>

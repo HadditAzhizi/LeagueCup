@@ -223,3 +223,5 @@ table.standings { width: 100%; border-collapse: collapse; font-variant-numeric: 
 .search-bar input:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: var(--primary); }
 .search-icon { position: absolute; left: 11px; font-size: 14px; opacity: 0.6; pointer-events: none; }
 mark.hl { background: rgba(217, 164, 0, 0.28); color: inherit; border-radius: 4px; padding: 0 3px; }
+
+.card-toolbar { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
