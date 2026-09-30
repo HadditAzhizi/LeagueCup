@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 /**
  * Round-robin fixtures using the circle method.
  * With an odd number of teams, one team rests each round.
@@ -34,7 +32,7 @@ export function generateLeagueFixtures(teams, doubleRoundRobin) {
 }
 
 function newMatch(round, homeId, awayId) {
-  return { id: randomUUID(), round, homeId, awayId, homeScore: null, awayScore: null, played: false };
+  return { id: crypto.randomUUID(), round, homeId, awayId, homeScore: null, awayScore: null, played: false };
 }
 
 export function computeStandings(league) {

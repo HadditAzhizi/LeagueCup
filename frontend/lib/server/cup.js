@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 export function roundName(matchesInRound) {
   switch (matchesInRound) {
     case 1: return 'Final';
@@ -44,7 +42,7 @@ export function generateCupBracket(teams) {
 
 function newMatch(homeId, awayId, bye) {
   return {
-    id: randomUUID(),
+    id: crypto.randomUUID(),
     homeId: homeId ?? null,
     awayId: awayId ?? null,
     bye,

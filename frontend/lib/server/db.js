@@ -1,11 +1,9 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 
 /**
  * Storage backend. Uses Supabase when SUPABASE_URL and
- * SUPABASE_SERVICE_ROLE_KEY are set, otherwise a local JSON file.
+ * SUPABASE_SERVICE_ROLE_KEY are set; otherwise, for local development
+ * only, a JSON file at data/db.json.
  *
  * Both expose the same shape: { leagues: [...], cups: [...] }, where each
  * league/cup is stored whole (one JSON file entry or one JSONB row).
@@ -13,21 +11,24 @@ import { createClient } from '@supabase/supabase-js';
 
 const TABLES = ['leagues', 'cups'];
 
-// ---------- JSON file ----------
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
-const DB_FILE = path.join(DATA_DIR, 'db.json');
+// ---------- JSON file (local dev) ----------
 
 function fileStore() {
   let cache = null;
+  const paths = async () => {
+    const path = await import('node:path');
+    const dir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+    return { dir, file: path.join(dir, 'db.json') };
+  };
 
   return {
-    name: `file JSON (${DB_FILE})`,
+    name: 'file JSON (data/db.json)',
     async load() {
       if (cache) return cache;
+      const fs = await import('node:fs/promises');
+      const { file } = await paths();
       try {
-        cache = JSON.parse(await fs.readFile(DB_FILE, 'utf8'));
+        cache = JSON.parse(await fs.readFile(file, 'utf8'));
       } catch (err) {
         if (err.code !== 'ENOENT') throw err;
         cache = {};
@@ -36,10 +37,11 @@ function fileStore() {
       return cache;
     },
     async save(_before, after) {
-      await fs.mkdir(DATA_DIR, { recursive: true });
-      const tmp = `${DB_FILE}.tmp`;
-      await fs.writeFile(tmp, JSON.stringify(after, null, 2));
-      await fs.rename(tmp, DB_FILE);
+      const fs = await import('node:fs/promises');
+      const { dir, file } = await paths();
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(`${file}.tmp`, JSON.stringify(after, null, 2));
+      await fs.rename(`${file}.tmp`, file);
       cache = after;
     },
   };
@@ -99,15 +101,27 @@ function supabaseStore(url, key) {
   };
 }
 
-const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
-const store = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
-  ? supabaseStore(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-  : fileStore();
+// Env vars are read lazily: on Cloudflare they're only available per request.
+let store = null;
+function getStore() {
+  if (store) return store;
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
+  if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+    store = supabaseStore(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  } else if (globalThis.navigator?.userAgent === 'Cloudflare-Workers') {
+    throw new Error('Supabase belum dikonfigurasi: set SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY di Cloudflare');
+  } else {
+    store = fileStore();
+  }
+  return store;
+}
 
-export const storageName = store.name;
+export function storageName() {
+  return getStore().name;
+}
 
 export async function read() {
-  return store.load();
+  return getStore().load();
 }
 
 // Serialize writes so concurrent requests can't interleave and lose data.
@@ -119,10 +133,11 @@ let queue = Promise.resolve();
  */
 export function write(fn) {
   const run = queue.then(async () => {
-    const before = await store.load();
+    const s = getStore();
+    const before = await s.load();
     const draft = structuredClone(before);
     const result = await fn(draft);
-    await store.save(before, draft);
+    await s.save(before, draft);
     return result;
   });
   queue = run.catch(() => {});

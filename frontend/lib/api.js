@@ -1,10 +1,9 @@
-// Empty = same origin; requests go through the Next.js /api rewrite.
-const BASE = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
+// API routes live in this Next.js app (app/api), so calls are same-origin.
 
 async function request(path, options = {}) {
   let res;
   try {
-    res = await fetch(`${BASE}/api${path}`, {
+    res = await fetch(`/api${path}`, {
       ...options,
       headers: { 'Content-Type': 'application/json', ...options.headers },
       body: options.body ? JSON.stringify(options.body) : undefined,

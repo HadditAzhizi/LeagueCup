@@ -1,5 +1,9 @@
 node_modules/
 .next/
-backend/data/
-.env*.local
+.open-next/
+.wrangler/
+frontend/data/
 .env
+.env*.local
+.dev.vars*
+!.dev.vars.example

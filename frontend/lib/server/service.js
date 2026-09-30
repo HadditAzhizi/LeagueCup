@@ -1,24 +1,36 @@
-import express from 'express';
-import cors from 'cors';
-import { randomUUID } from 'node:crypto';
-import { read, write, storageName } from './db.js';
-import { generateLeagueFixtures, computeStandings } from './league.js';
-import { generateCupBracket, propagate, findMatch, decideWinner, champion, clearResult } from './cup.js';
+import { read, write, storageName } from './db';
+import { generateLeagueFixtures, computeStandings } from './league';
+import { generateCupBracket, propagate, findMatch, decideWinner, champion, clearResult } from './cup';
 
-const app = express();
-const PORT = process.env.PORT || 4000;
-
-app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
-app.use(express.json());
-
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(status, message) {
     super(message);
     this.status = status;
   }
 }
 
-const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+/** Wrap a route handler: resolves dynamic params and turns errors into JSON. */
+export function handle(fn) {
+  return async (req, ctx) => {
+    try {
+      const params = (await ctx?.params) ?? {};
+      let body = {};
+      if (req.method === 'POST' || req.method === 'PUT') {
+        body = await req.json().catch(() => {
+          throw new HttpError(400, 'Body harus berupa JSON');
+        });
+      }
+      const result = await fn({ params, body: body ?? {} });
+      if (result === undefined) return new Response(null, { status: 204 });
+      const status = req.method === 'POST' ? 201 : 200;
+      return Response.json(result, { status });
+    } catch (err) {
+      const status = err.status || 500;
+      if (status >= 500) console.error(err);
+      return Response.json({ error: status >= 500 ? 'Terjadi kesalahan server' : err.message }, { status });
+    }
+  };
+}
 
 function parseTeams(input) {
   if (!Array.isArray(input)) throw new HttpError(400, 'teams harus berupa array nama tim');
@@ -31,7 +43,7 @@ function parseTeams(input) {
     if (seen.has(key)) throw new HttpError(400, `Nama tim duplikat: ${n}`);
     seen.add(key);
   }
-  return names.map((name) => ({ id: randomUUID(), name }));
+  return names.map((name) => ({ id: crypto.randomUUID(), name }));
 }
 
 function requireName(name) {
@@ -57,6 +69,8 @@ function shuffle(arr) {
   return a;
 }
 
+const now = () => new Date().toISOString();
+
 // ---------- Leagues ----------
 
 function leagueSummary(l) {
@@ -68,9 +82,7 @@ function leagueSummary(l) {
   };
 }
 
-function leagueDetail(l) {
-  return { ...l, standings: computeStandings(l) };
-}
+const leagueDetail = (l) => ({ ...l, standings: computeStandings(l) });
 
 function getLeague(data, id) {
   const l = data.leagues.find((x) => x.id === id);
@@ -78,20 +90,20 @@ function getLeague(data, id) {
   return l;
 }
 
-app.get('/api/leagues', wrap(async (_req, res) => {
+export async function listLeagues() {
   const data = await read();
-  res.json(data.leagues.map(leagueSummary).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-}));
+  return data.leagues.map(leagueSummary).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
 
-app.post('/api/leagues', wrap(async (req, res) => {
-  const { name, season, teams, doubleRoundRobin = false, shuffleTeams = false } = req.body ?? {};
-  const s = req.body?.settings ?? {};
+export async function createLeague(body) {
+  const { name, season, teams, doubleRoundRobin = false, shuffleTeams = false } = body;
+  const s = body.settings ?? {};
   const pts = (v, d) => (v === undefined || v === '' ? d : parseScore(v, 'Poin'));
   let teamList = parseTeams(teams);
   if (shuffleTeams) teamList = shuffle(teamList);
 
   const league = {
-    id: randomUUID(),
+    id: crypto.randomUUID(),
     name: requireName(name),
     season: String(season ?? '').trim(),
     teams: teamList,
@@ -102,52 +114,51 @@ app.post('/api/leagues', wrap(async (req, res) => {
       pointsLoss: pts(s.pointsLoss, 0),
     },
     matches: generateLeagueFixtures(teamList, Boolean(doubleRoundRobin)),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: now(),
+    updatedAt: now(),
   };
   await write((data) => { data.leagues.push(league); });
-  res.status(201).json(leagueDetail(league));
-}));
+  return leagueDetail(league);
+}
 
-app.get('/api/leagues/:id', wrap(async (req, res) => {
-  res.json(leagueDetail(getLeague(await read(), req.params.id)));
-}));
+export async function getLeagueDetail(id) {
+  return leagueDetail(getLeague(await read(), id));
+}
 
-app.put('/api/leagues/:id', wrap(async (req, res) => {
+export async function updateLeague(id, body) {
   const league = await write((data) => {
-    const l = getLeague(data, req.params.id);
-    if (req.body.name !== undefined) l.name = requireName(req.body.name);
-    if (req.body.season !== undefined) l.season = String(req.body.season).trim();
-    l.updatedAt = new Date().toISOString();
+    const l = getLeague(data, id);
+    if (body.name !== undefined) l.name = requireName(body.name);
+    if (body.season !== undefined) l.season = String(body.season).trim();
+    l.updatedAt = now();
     return l;
   });
-  res.json(leagueDetail(league));
-}));
+  return leagueDetail(league);
+}
 
-app.delete('/api/leagues/:id', wrap(async (req, res) => {
+export async function deleteLeague(id) {
   await write((data) => {
-    getLeague(data, req.params.id);
-    data.leagues = data.leagues.filter((x) => x.id !== req.params.id);
+    getLeague(data, id);
+    data.leagues = data.leagues.filter((x) => x.id !== id);
   });
-  res.status(204).end();
-}));
+}
 
-app.put('/api/leagues/:id/matches/:matchId', wrap(async (req, res) => {
+export async function saveLeagueMatch(id, matchId, body) {
   const league = await write((data) => {
-    const l = getLeague(data, req.params.id);
-    const m = l.matches.find((x) => x.id === req.params.matchId);
+    const l = getLeague(data, id);
+    const m = l.matches.find((x) => x.id === matchId);
     if (!m) throw new HttpError(404, 'Pertandingan tidak ditemukan');
-    const hs = parseScore(req.body.homeScore, 'Skor kandang');
-    const as = parseScore(req.body.awayScore, 'Skor tandang');
+    const hs = parseScore(body.homeScore, 'Skor kandang');
+    const as = parseScore(body.awayScore, 'Skor tandang');
     if ((hs === null) !== (as === null)) throw new HttpError(400, 'Isi kedua skor, atau kosongkan keduanya');
     m.homeScore = hs;
     m.awayScore = as;
     m.played = hs !== null;
-    l.updatedAt = new Date().toISOString();
+    l.updatedAt = now();
     return l;
   });
-  res.json(leagueDetail(league));
-}));
+  return leagueDetail(league);
+}
 
 // ---------- Cups ----------
 
@@ -163,9 +174,7 @@ function cupSummary(c) {
   };
 }
 
-function cupDetail(c) {
-  return { ...c, championId: champion(c) };
-}
+const cupDetail = (c) => ({ ...c, championId: champion(c) });
 
 function getCup(data, id) {
   const c = data.cups.find((x) => x.id === id);
@@ -173,61 +182,60 @@ function getCup(data, id) {
   return c;
 }
 
-app.get('/api/cups', wrap(async (_req, res) => {
+export async function listCups() {
   const data = await read();
-  res.json(data.cups.map(cupSummary).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-}));
+  return data.cups.map(cupSummary).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
 
-app.post('/api/cups', wrap(async (req, res) => {
-  const { name, season, teams, shuffleTeams = false } = req.body ?? {};
+export async function createCup(body) {
+  const { name, season, teams, shuffleTeams = false } = body;
   let teamList = parseTeams(teams);
   if (shuffleTeams) teamList = shuffle(teamList);
   const cup = {
-    id: randomUUID(),
+    id: crypto.randomUUID(),
     name: requireName(name),
     season: String(season ?? '').trim(),
     teams: teamList,
     rounds: generateCupBracket(teamList),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: now(),
+    updatedAt: now(),
   };
   await write((data) => { data.cups.push(cup); });
-  res.status(201).json(cupDetail(cup));
-}));
+  return cupDetail(cup);
+}
 
-app.get('/api/cups/:id', wrap(async (req, res) => {
-  res.json(cupDetail(getCup(await read(), req.params.id)));
-}));
+export async function getCupDetail(id) {
+  return cupDetail(getCup(await read(), id));
+}
 
-app.put('/api/cups/:id', wrap(async (req, res) => {
+export async function updateCup(id, body) {
   const cup = await write((data) => {
-    const c = getCup(data, req.params.id);
-    if (req.body.name !== undefined) c.name = requireName(req.body.name);
-    if (req.body.season !== undefined) c.season = String(req.body.season).trim();
-    c.updatedAt = new Date().toISOString();
+    const c = getCup(data, id);
+    if (body.name !== undefined) c.name = requireName(body.name);
+    if (body.season !== undefined) c.season = String(body.season).trim();
+    c.updatedAt = now();
     return c;
   });
-  res.json(cupDetail(cup));
-}));
+  return cupDetail(cup);
+}
 
-app.delete('/api/cups/:id', wrap(async (req, res) => {
+export async function deleteCup(id) {
   await write((data) => {
-    getCup(data, req.params.id);
-    data.cups = data.cups.filter((x) => x.id !== req.params.id);
+    getCup(data, id);
+    data.cups = data.cups.filter((x) => x.id !== id);
   });
-  res.status(204).end();
-}));
+}
 
-app.put('/api/cups/:id/matches/:matchId', wrap(async (req, res) => {
+export async function saveCupMatch(id, matchId, body) {
   const cup = await write((data) => {
-    const c = getCup(data, req.params.id);
-    const m = findMatch(c, req.params.matchId);
+    const c = getCup(data, id);
+    const m = findMatch(c, matchId);
     if (!m) throw new HttpError(404, 'Pertandingan tidak ditemukan');
     if (m.bye) throw new HttpError(400, 'Pertandingan bye tidak bisa diubah');
     if (!m.homeId || !m.awayId) throw new HttpError(400, 'Kedua tim belum ditentukan');
 
-    const hs = parseScore(req.body.homeScore, 'Skor kandang');
-    const as = parseScore(req.body.awayScore, 'Skor tandang');
+    const hs = parseScore(body.homeScore, 'Skor kandang');
+    const as = parseScore(body.awayScore, 'Skor tandang');
     if ((hs === null) !== (as === null)) throw new HttpError(400, 'Isi kedua skor, atau kosongkan keduanya');
 
     if (hs === null) {
@@ -236,8 +244,8 @@ app.put('/api/cups/:id/matches/:matchId', wrap(async (req, res) => {
       m.homeScore = hs;
       m.awayScore = as;
       if (hs === as) {
-        m.homePens = parseScore(req.body.homePens, 'Adu penalti kandang');
-        m.awayPens = parseScore(req.body.awayPens, 'Adu penalti tandang');
+        m.homePens = parseScore(body.homePens, 'Adu penalti kandang');
+        m.awayPens = parseScore(body.awayPens, 'Adu penalti tandang');
       } else {
         m.homePens = m.awayPens = null;
       }
@@ -247,26 +255,13 @@ app.put('/api/cups/:id/matches/:matchId', wrap(async (req, res) => {
       m.played = true;
     }
     propagate(c.rounds);
-    c.updatedAt = new Date().toISOString();
+    c.updatedAt = now();
     return c;
   });
-  res.json(cupDetail(cup));
-}));
+  return cupDetail(cup);
+}
 
-// ---------- Misc ----------
-
-app.get('/api/health', wrap(async (_req, res) => {
+export async function health() {
   await read();
-  res.json({ ok: true, storage: storageName });
-}));
-
-app.use((_req, _res, next) => next(new HttpError(404, 'Endpoint tidak ditemukan')));
-
-// eslint-disable-next-line no-unused-vars
-app.use((err, _req, res, _next) => {
-  const status = err.status || (err.type === 'entity.parse.failed' ? 400 : 500);
-  if (status >= 500) console.error(err);
-  res.status(status).json({ error: status >= 500 ? 'Terjadi kesalahan server' : err.message });
-});
-
-app.listen(PORT, () => console.log(`LeagueCup API berjalan di http://localhost:${PORT} — penyimpanan: ${storageName}`));
+  return { ok: true, storage: storageName() };
+}

@@ -1,5 +1,5 @@
 // Salin data dari data/db.json ke Supabase. Aman dijalankan ulang (upsert).
-// Pakai: npm run migrate
+// Pakai (dari folder frontend): npm run migrate
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('Isi SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY di backend/.env terlebih dahulu.');
+  console.error('Isi SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY di frontend/.env.local terlebih dahulu.');
   process.exit(1);
 }
 
