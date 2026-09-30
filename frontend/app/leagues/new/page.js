@@ -42,7 +42,7 @@ export default function NewLeaguePage() {
         </div>
       </div>
 
-      <form className="card" onSubmit={submit}>
+      <form className="card form-card" onSubmit={submit}>
         {error && <div className="alert error">{error}</div>}
 
         <div className="row">
@@ -70,6 +70,7 @@ export default function NewLeaguePage() {
           </span>
         </div>
 
+        <div className="options">
         <label className="check">
           <input type="checkbox" checked={doubleRoundRobin} onChange={(e) => setDoubleRoundRobin(e.target.checked)} />
           Kandang &amp; tandang (2 putaran)
@@ -78,8 +79,9 @@ export default function NewLeaguePage() {
           <input type="checkbox" checked={shuffleTeams} onChange={(e) => setShuffleTeams(e.target.checked)} />
           Acak urutan tim sebelum membuat jadwal
         </label>
+        </div>
 
-        <div className="row-3" style={{ marginTop: 12 }}>
+        <div className="row-3">
           {[
             ['pointsWin', 'Poin Menang'],
             ['pointsDraw', 'Poin Seri'],
@@ -89,6 +91,7 @@ export default function NewLeaguePage() {
               <label>{label}</label>
               <input
                 type="number"
+                inputMode="numeric"
                 min="0"
                 max="99"
                 value={points[key]}
@@ -98,7 +101,7 @@ export default function NewLeaguePage() {
           ))}
         </div>
 
-        <div className="btn-row">
+        <div className="form-actions">
           <button className="btn primary" disabled={busy || n < 2}>{busy ? 'Menyimpan…' : 'Buat & Simpan Liga'}</button>
           <button type="button" className="btn" onClick={() => router.back()}>Batal</button>
         </div>

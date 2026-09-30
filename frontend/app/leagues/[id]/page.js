@@ -31,29 +31,31 @@ function FixtureRow({ match, teamName, onSave, highlight }) {
   }
 
   return (
-    <>
+    <div>
       <form
         className={`fixture${match.played ? ' played' : ''}`}
         onSubmit={(e) => { e.preventDefault(); save(home, away); }}
       >
         <div className="home"><TeamLabel name={teamName(match.homeId)} on={highlight?.has(match.homeId)} /></div>
         <div className="score-inputs">
-          <input type="number" min="0" max="99" value={home} onChange={(e) => setHome(e.target.value)} aria-label="Skor kandang" />
+          <input type="number" inputMode="numeric" pattern="[0-9]*" min="0" max="99" value={home} onChange={(e) => setHome(e.target.value)} aria-label="Skor kandang" />
           <span className="sep">–</span>
-          <input type="number" min="0" max="99" value={away} onChange={(e) => setAway(e.target.value)} aria-label="Skor tandang" />
+          <input type="number" inputMode="numeric" pattern="[0-9]*" min="0" max="99" value={away} onChange={(e) => setAway(e.target.value)} aria-label="Skor tandang" />
         </div>
         <div className="away"><TeamLabel name={teamName(match.awayId)} on={highlight?.has(match.awayId)} /></div>
-        <div className="actions btn-row">
-          <button className="btn sm primary" disabled={busy || !dirty || home === '' || away === ''}>Simpan</button>
+        <div className="actions">
+          <button className="btn sm primary" disabled={busy || !dirty || home === '' || away === ''} title="Simpan" aria-label="Simpan">
+            <span className="ico">✓</span><span className="txt">Simpan</span>
+          </button>
           {match.played && (
-            <button type="button" className="btn sm" disabled={busy} onClick={() => save(null, null)} title="Hapus hasil">
+            <button type="button" className="btn sm icon" disabled={busy} onClick={() => save(null, null)} title="Hapus hasil" aria-label="Hapus hasil">
               ✕
             </button>
           )}
         </div>
       </form>
-      {error && <div className="alert error" style={{ marginTop: 6 }}>{error}</div>}
-    </>
+      {error && <div className="alert error fixture-error">{error}</div>}
+    </div>
   );
 }
 
@@ -133,15 +135,17 @@ export default function LeagueDetailPage() {
       />
 
       <div className="search-bar">
-        <span className="search-icon" aria-hidden>🔍</span>
-        <input
-          type="search"
-          list="club-list"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Cari klub…"
-          aria-label="Cari klub"
-        />
+        <div className="search-field">
+          <span className="search-icon" aria-hidden>🔍</span>
+          <input
+            type="search"
+            list="club-list"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Cari klub…"
+            aria-label="Cari klub"
+          />
+        </div>
         <datalist id="club-list">
           {league.teams.map((t) => <option key={t.id} value={t.name} />)}
         </datalist>
@@ -155,7 +159,7 @@ export default function LeagueDetailPage() {
       </div>
 
       {tab === 'standings' && (
-        <div className="card table-wrap">
+        <div className="card">
           <div className="card-toolbar">
             {found && <span className="muted small">Gambar selalu berisi klasemen lengkap.</span>}
             <button className="btn sm" onClick={() => exportImage(false)} disabled={exporting}>
@@ -167,20 +171,21 @@ export default function LeagueDetailPage() {
               </button>
             )}
           </div>
+          <div className="table-scroll">
           <table className="standings">
             <thead>
               <tr>
                 <th>#</th>
                 <th className="team">Tim</th>
-                <th title="Main">M</th>
+                <th title="Main">Main</th>
                 <th title="Menang">M</th>
                 <th title="Seri">S</th>
                 <th title="Kalah">K</th>
-                <th title="Gol memasukkan">GM</th>
-                <th title="Gol kemasukan">GK</th>
+                <th className="hide-sm" title="Gol memasukkan">GM</th>
+                <th className="hide-sm" title="Gol kemasukan">GK</th>
                 <th title="Selisih gol">SG</th>
                 <th>Poin</th>
-                <th>5 Terakhir</th>
+                <th className="hide-md">5 Terakhir</th>
               </tr>
             </thead>
             <tbody>
@@ -192,11 +197,11 @@ export default function LeagueDetailPage() {
                   <td>{r.won}</td>
                   <td>{r.drawn}</td>
                   <td>{r.lost}</td>
-                  <td>{r.gf}</td>
-                  <td>{r.ga}</td>
+                  <td className="hide-sm">{r.gf}</td>
+                  <td className="hide-sm">{r.ga}</td>
                   <td>{r.gd > 0 ? `+${r.gd}` : r.gd}</td>
                   <td className="pts">{r.points}</td>
-                  <td>
+                  <td className="hide-md">
                     <span className="form">
                       {r.form.map((f, i) => (
                         <span key={i} className={f}>{f === 'W' ? 'M' : f === 'D' ? 'S' : 'K'}</span>
@@ -210,7 +215,10 @@ export default function LeagueDetailPage() {
               )}
             </tbody>
           </table>
-          <p className="muted small" style={{ marginBottom: 0 }}>
+          </div>
+          <p className="muted small card-note">
+            Main = jumlah laga · M/S/K = menang/seri/kalah
+            <span className="hide-sm"> · GM/GK = gol memasukkan/kemasukan</span> · SG = selisih gol.
             Poin: menang {league.settings.pointsWin}, seri {league.settings.pointsDraw}, kalah {league.settings.pointsLoss}.
             Urutan: poin → selisih gol → gol memasukkan → jumlah menang.
           </p>
@@ -237,6 +245,7 @@ export default function LeagueDetailPage() {
                   <span className="muted small">Libur: {resting.map((t) => t.name).join(', ')}</span>
                 )}
               </div>
+              <div className="fixture-list">
               {shown.map((m) => (
                 <FixtureRow
                   key={`${m.id}-${m.homeScore}-${m.awayScore}`}
@@ -246,6 +255,7 @@ export default function LeagueDetailPage() {
                   highlight={found}
                 />
               ))}
+              </div>
             </div>
           );
         })}

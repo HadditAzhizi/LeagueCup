@@ -37,7 +37,7 @@ export default function CompetitionHeader({ kind, item, subtitle, onSave, onDele
 
   if (editing) {
     return (
-      <form className="card" onSubmit={save} style={{ marginBottom: 24 }}>
+      <form className="card form-card" onSubmit={save} style={{ marginBottom: 'var(--s6)' }}>
         {error && <div className="alert error">{error}</div>}
         <div className="row">
           <div className="field">
@@ -49,7 +49,7 @@ export default function CompetitionHeader({ kind, item, subtitle, onSave, onDele
             <input type="text" value={season} onChange={(e) => setSeason(e.target.value)} />
           </div>
         </div>
-        <div className="btn-row">
+        <div className="form-actions">
           <button className="btn primary" disabled={busy}>Simpan</button>
           <button
             type="button"

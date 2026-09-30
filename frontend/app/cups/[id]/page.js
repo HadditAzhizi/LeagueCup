@@ -51,6 +51,8 @@ function BracketMatch({ match, teamName, onSave }) {
         {ready && (
           <input
             type="number"
+            inputMode="numeric"
+            pattern="[0-9]*"
             min="0"
             max="99"
             value={value}
@@ -71,9 +73,9 @@ function BracketMatch({ match, teamName, onSave }) {
           {isDraw ? (
             <span className="pens">
               Penalti
-              <input type="number" min="0" max="99" value={hp} onChange={(e) => setHp(e.target.value)} aria-label="Penalti kandang" />
+              <input type="number" inputMode="numeric" pattern="[0-9]*" min="0" max="99" value={hp} onChange={(e) => setHp(e.target.value)} aria-label="Penalti kandang" />
               –
-              <input type="number" min="0" max="99" value={ap} onChange={(e) => setAp(e.target.value)} aria-label="Penalti tandang" />
+              <input type="number" inputMode="numeric" pattern="[0-9]*" min="0" max="99" value={ap} onChange={(e) => setAp(e.target.value)} aria-label="Penalti tandang" />
             </span>
           ) : (
             <span className="muted">{match.played ? 'Selesai' : 'Belum dimainkan'}</span>
@@ -87,14 +89,14 @@ function BracketMatch({ match, teamName, onSave }) {
               Simpan
             </button>
             {match.played && (
-              <button className="btn sm" disabled={busy} title="Hapus hasil" onClick={() => save({ homeScore: null, awayScore: null })}>
+              <button className="btn sm icon" disabled={busy} title="Hapus hasil" aria-label="Hapus hasil" onClick={() => save({ homeScore: null, awayScore: null })}>
                 ✕
               </button>
             )}
           </span>
         </div>
       )}
-      {error && <div className="alert error" style={{ margin: 8 }}>{error}</div>}
+      {error && <div className="alert error">{error}</div>}
     </div>
   );
 }

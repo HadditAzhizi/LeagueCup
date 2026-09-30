@@ -42,7 +42,7 @@ export default function NewCupPage() {
         </div>
       </div>
 
-      <form className="card" onSubmit={submit}>
+      <form className="card form-card" onSubmit={submit}>
         {error && <div className="alert error">{error}</div>}
 
         <div className="row">
@@ -70,12 +70,14 @@ export default function NewCupPage() {
           </span>
         </div>
 
+        <div className="options">
         <label className="check">
           <input type="checkbox" checked={shuffleTeams} onChange={(e) => setShuffleTeams(e.target.checked)} />
           Undian acak (jika tidak dicentang, urutan daftar = urutan bagan)
         </label>
+        </div>
 
-        <div className="btn-row" style={{ marginTop: 16 }}>
+        <div className="form-actions">
           <button className="btn primary" disabled={busy || n < 2}>{busy ? 'Menyimpan…' : 'Buat & Simpan Cup'}</button>
           <button type="button" className="btn" onClick={() => router.back()}>Batal</button>
         </div>

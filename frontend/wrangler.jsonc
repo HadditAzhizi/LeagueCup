@@ -16,9 +16,12 @@
     }
   ],
   "observability": { "enabled": true },
-  // Non-secret config only. SUPABASE_SERVICE_ROLE_KEY must be added in the
-  // dashboard as type "Secret" (Settings → Variables and Secrets) — never here,
-  // since this file is committed to git.
+  // Keep variables set in the dashboard (e.g. SUPABASE_SERVICE_ROLE_KEY)
+  // instead of wiping them on every Git deploy.
+  "keep_vars": true,
+  // Non-secret config only. SUPABASE_SERVICE_ROLE_KEY is set in the
+  // dashboard (Settings → Variables and Secrets) — never here, since this
+  // file is committed to git.
   "vars": {
     "SUPABASE_URL": "https://zzcwkhransxdgeiqrrtf.supabase.co"
   }
