@@ -27,7 +27,8 @@ export function handle(fn) {
     } catch (err) {
       const status = err.status || 500;
       if (status >= 500) console.error(err);
-      return Response.json({ error: status >= 500 ? 'Terjadi kesalahan server' : err.message }, { status });
+      const message = status < 500 || err.expose ? err.message : 'Terjadi kesalahan server';
+      return Response.json({ error: message }, { status });
     }
   };
 }

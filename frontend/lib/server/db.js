@@ -11,6 +11,12 @@ import { createClient } from '@supabase/supabase-js';
 
 const TABLES = ['leagues', 'cups'];
 
+/** Storage problems (misconfiguration, Supabase down) are shown to the user as-is. */
+class StorageError extends Error {
+  status = 503;
+  expose = true;
+}
+
 // ---------- JSON file (local dev) ----------
 
 function fileStore() {
@@ -57,7 +63,7 @@ function supabaseStore(url, key) {
     const hint = error.code === '42P01' || error.code === 'PGRST205'
       ? ` — tabel "${table}" belum ada, jalankan supabase/schema.sql`
       : '';
-    throw new Error(`Supabase: ${error.message}${hint}`);
+    throw new StorageError(`Supabase: ${error.message}${hint}`);
   };
 
   return {
@@ -109,7 +115,7 @@ function getStore() {
   if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
     store = supabaseStore(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   } else if (globalThis.navigator?.userAgent === 'Cloudflare-Workers') {
-    throw new Error('Supabase belum dikonfigurasi: set SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY di Cloudflare');
+    throw new StorageError('Supabase belum dikonfigurasi: set SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY di Cloudflare (Settings → Variables and Secrets)');
   } else {
     store = fileStore();
   }
