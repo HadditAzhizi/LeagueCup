@@ -6,7 +6,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import CompetitionHeader from '@/components/CompetitionHeader';
 
-function FixtureRow({ match, teamName, onSave }) {
+function TeamLabel({ name, on }) {
+  return on ? <mark className="hl">{name}</mark> : name;
+}
+
+function FixtureRow({ match, teamName, onSave, highlight }) {
   const [home, setHome] = useState(match.homeScore ?? '');
   const [away, setAway] = useState(match.awayScore ?? '');
   const [busy, setBusy] = useState(false);
@@ -31,13 +35,13 @@ function FixtureRow({ match, teamName, onSave }) {
         className={`fixture${match.played ? ' played' : ''}`}
         onSubmit={(e) => { e.preventDefault(); save(home, away); }}
       >
-        <div className="home">{teamName(match.homeId)}</div>
+        <div className="home"><TeamLabel name={teamName(match.homeId)} on={highlight?.has(match.homeId)} /></div>
         <div className="score-inputs">
           <input type="number" min="0" max="99" value={home} onChange={(e) => setHome(e.target.value)} aria-label="Skor kandang" />
           <span className="sep">–</span>
           <input type="number" min="0" max="99" value={away} onChange={(e) => setAway(e.target.value)} aria-label="Skor tandang" />
         </div>
-        <div className="away">{teamName(match.awayId)}</div>
+        <div className="away"><TeamLabel name={teamName(match.awayId)} on={highlight?.has(match.awayId)} /></div>
         <div className="actions btn-row">
           <button className="btn sm primary" disabled={busy || !dirty || home === '' || away === ''}>Simpan</button>
           {match.played && (
@@ -58,6 +62,7 @@ export default function LeagueDetailPage() {
   const [league, setLeague] = useState(null);
   const [error, setError] = useState('');
   const [tab, setTab] = useState('standings');
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     api.getLeague(id).then(setLeague).catch((e) => setError(e.message));
@@ -87,6 +92,14 @@ export default function LeagueDetailPage() {
   const teamName = (tid) => names.get(tid) ?? '?';
   const played = league.matches.filter((m) => m.played).length;
 
+  const q = query.trim().toLowerCase();
+  const found = q ? new Set(league.teams.filter((t) => t.name.toLowerCase().includes(q)).map((t) => t.id)) : null;
+  const involves = (m) => !found || found.has(m.homeId) || found.has(m.awayId);
+  const standings = found ? league.standings.filter((r) => found.has(r.teamId)) : league.standings;
+  const visibleRounds = rounds
+    .map(([r, ms]) => [r, ms, ms.filter(involves)])
+    .filter(([, ms, shown]) => !found || shown.length > 0 || league.teams.some((t) => found.has(t.id) && !ms.some((m) => m.homeId === t.id || m.awayId === t.id)));
+
   async function saveMatch(matchId, body) {
     setLeague(await api.saveLeagueMatch(id, matchId, body));
   }
@@ -102,6 +115,23 @@ export default function LeagueDetailPage() {
         onSave={async (body) => setLeague(await api.updateLeague(id, body))}
         onDelete={async () => { await api.deleteLeague(id); router.push('/'); }}
       />
+
+      <div className="search-bar">
+        <span className="search-icon" aria-hidden>🔍</span>
+        <input
+          type="search"
+          list="club-list"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Cari klub…"
+          aria-label="Cari klub"
+        />
+        <datalist id="club-list">
+          {league.teams.map((t) => <option key={t.id} value={t.name} />)}
+        </datalist>
+        {query && <button type="button" className="btn sm" onClick={() => setQuery('')}>Hapus</button>}
+        {found && <span className="muted small">{found.size} klub cocok</span>}
+      </div>
 
       <div className="tabs">
         <button className={tab === 'standings' ? 'active' : ''} onClick={() => setTab('standings')}>Klasemen</button>
@@ -127,10 +157,10 @@ export default function LeagueDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {league.standings.map((r) => (
+              {standings.map((r) => (
                 <tr key={r.teamId}>
                   <td className="pos">{r.position}</td>
-                  <td className="team">{r.name}</td>
+                  <td className="team"><TeamLabel name={r.name} on={!!found} /></td>
                   <td>{r.played}</td>
                   <td>{r.won}</td>
                   <td>{r.drawn}</td>
@@ -148,6 +178,9 @@ export default function LeagueDetailPage() {
                   </td>
                 </tr>
               ))}
+              {standings.length === 0 && (
+                <tr><td colSpan={11} className="muted">Tidak ada klub yang cocok dengan “{query}”.</td></tr>
+              )}
             </tbody>
           </table>
           <p className="muted small" style={{ marginBottom: 0 }}>
@@ -157,9 +190,14 @@ export default function LeagueDetailPage() {
         </div>
       )}
 
+      {tab === 'fixtures' && found && visibleRounds.length === 0 && (
+        <div className="empty">Tidak ada klub yang cocok dengan “{query}”.</div>
+      )}
       {tab === 'fixtures' &&
-        rounds.map(([r, ms]) => {
-          const resting = league.teams.filter((t) => !ms.some((m) => m.homeId === t.id || m.awayId === t.id));
+        visibleRounds.map(([r, ms, shown]) => {
+          const resting = league.teams.filter(
+            (t) => (!found || found.has(t.id)) && !ms.some((m) => m.homeId === t.id || m.awayId === t.id),
+          );
           const done = ms.filter((m) => m.played).length;
           return (
             <div className="card" key={r}>
@@ -172,12 +210,13 @@ export default function LeagueDetailPage() {
                   <span className="muted small">Libur: {resting.map((t) => t.name).join(', ')}</span>
                 )}
               </div>
-              {ms.map((m) => (
+              {shown.map((m) => (
                 <FixtureRow
                   key={`${m.id}-${m.homeScore}-${m.awayScore}`}
                   match={m}
                   teamName={teamName}
                   onSave={saveMatch}
+                  highlight={found}
                 />
               ))}
             </div>
